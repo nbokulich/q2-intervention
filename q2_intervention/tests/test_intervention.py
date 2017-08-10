@@ -12,11 +12,12 @@ from skbio import DistanceMatrix
 from io import StringIO
 from warnings import filterwarnings
 from q2_intervention._utilities import (
-    _get_group_pairs, _extract_distance_distribution, _get_paired_differences,
-    _between_subject_distance_distribution, _compare_paired_differences,
+    _get_group_pairs, _extract_distance_distribution,
+    _get_pairwise_differences,
+    _between_subject_distance_distribution, _compare_pairwise_differences,
     _multiple_group_difference, _per_method_pairwise_stats)
 from q2_intervention._intervention import (
-    paired_differences, pairwise_distance, linear_mixed_effects)
+    pairwise_differences, pairwise_distances, linear_mixed_effects)
 import tempfile
 import pkg_resources
 from qiime2.plugin.testing import TestPluginBase
@@ -70,18 +71,18 @@ class UtilitiesTests(InterventionTestPluginBase):
         self.assertAlmostEqual(sorted(res)[7], 0.3)
         self.assertAlmostEqual(sorted(res)[11], 1.0)
 
-    def test_get_paired_differences(self):
-        res = _get_paired_differences(
+    def test_get_pairwise_differences(self):
+        res = _get_pairwise_differences(
             md, [('0', '3'), ('1', '4'), ('2', '5')], 'Value')
         self.assertEqual(res, [0.08, 0.06, 0.07999999999999999])
 
-    def test_compare_paired_differences_parametric(self):
-        res = _compare_paired_differences(groups, parametric=True)
+    def test_compare_pairwise_differences_parametric(self):
+        res = _compare_pairwise_differences(groups, parametric=True)
         self.assertAlmostEqual(res['FDR P']['a'], 9.4882148564067405e-07)
         self.assertAlmostEqual(res['FDR P']['b'], 4.8474685173462082e-09)
 
-    def test_compare_paired_differences_nonparametric(self):
-        res = _compare_paired_differences(groups, parametric=False)
+    def test_compare_pairwise_differences_nonparametric(self):
+        res = _compare_pairwise_differences(groups, parametric=False)
         self.assertAlmostEqual(res['FDR P']['a'], 0.0021830447373622506)
         self.assertAlmostEqual(res['FDR P']['b'], 0.0021830447373622506)
 
@@ -141,23 +142,23 @@ class InterventionTests(InterventionTestPluginBase):
         self.md_ecam_fp = _load_md('ecam_map_maturity.txt')
         self.md_ecam_dm = _load_dm('ecam-unweighted-distance-matrix.qza')
 
-    def test_paired_differences(self):
-        paired_differences(
+    def test_pairwise_differences(self):
+        pairwise_differences(
             output_dir=self.temp_dir.name, table=None,
             metadata=self.md_ecam_fp, group_column='delivery',
             state_column='month', state_1=0, state_2=3,
             individual_id_column='studyid', metric='observed_otus')
 
-    def test_paired_differences_taxa(self):
-        paired_differences(
+    def test_pairwise_differences_taxa(self):
+        pairwise_differences(
             output_dir=self.temp_dir.name, table=self.table_ecam_fp,
             metadata=self.md_ecam_fp, group_column='delivery',
             state_column='month', state_1=0, state_2=3,
             individual_id_column='studyid',
             metric='e2c3ff4f647112723741aa72087f1bfa')
 
-    def test_pairwise_distance(self):
-        pairwise_distance(
+    def test_pairwise_distances(self):
+        pairwise_distances(
             output_dir=self.temp_dir.name, distance_matrix=self.md_ecam_dm,
             metadata=self.md_ecam_fp, group_column='delivery',
             state_column='month', state_1=0, state_2=3,

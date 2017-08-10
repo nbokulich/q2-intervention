@@ -11,17 +11,17 @@ from skbio import DistanceMatrix
 
 from ._utilities import (_get_group_pairs, _extract_distance_distribution,
                          _between_subject_distance_distribution, _visualize,
-                         _get_paired_differences, _stats_and_visuals,
+                         _get_pairwise_differences, _stats_and_visuals,
                          _add_metric_to_metadata, _linear_effects,
                          _regplot_subplots_from_dataframe, _load_metadata)
 
 
-def paired_differences(output_dir: str, metadata: qiime2.Metadata,
-                       group_column: str, metric: str, state_column: str,
-                       state_1: str, state_2: str, individual_id_column: str,
-                       parametric: bool=False, palette: str='Set1',
-                       drop_duplicates: bool=True, table: pd.DataFrame=None
-                       ) -> None:
+def pairwise_differences(output_dir: str, metadata: qiime2.Metadata,
+                         group_column: str, metric: str, state_column: str,
+                         state_1: str, state_2: str, individual_id_column: str,
+                         parametric: bool=False, palette: str='Set1',
+                         drop_duplicates: bool=True, table: pd.DataFrame=None
+                         ) -> None:
 
     # find metric in metadata or derive from table and merge into metadata
     metadata = _add_metric_to_metadata(table, metadata, metric)
@@ -36,7 +36,7 @@ def paired_differences(output_dir: str, metadata: qiime2.Metadata,
             group_column=group_column, state_column=state_column,
             state_values=[state_1, state_2],
             drop_duplicates=drop_duplicates)
-        pairs[group] = _get_paired_differences(metadata, group_pairs, metric)
+        pairs[group] = _get_pairwise_differences(metadata, group_pairs, metric)
 
     # Calculate test statistics and generate boxplots
     _stats_and_visuals(
@@ -46,12 +46,12 @@ def paired_differences(output_dir: str, metadata: qiime2.Metadata,
         paired_difference_tests=True, boxplot=True)
 
 
-def pairwise_distance(output_dir: str, distance_matrix: DistanceMatrix,
-                      metadata: qiime2.Metadata, group_column: str,
-                      state_column: str, state_1: str, state_2: str,
-                      individual_id_column: str, parametric: bool=False,
-                      palette: str='Set1', drop_duplicates: bool=True,
-                      between_group_distance: bool=False) -> None:
+def pairwise_distances(output_dir: str, distance_matrix: DistanceMatrix,
+                       metadata: qiime2.Metadata, group_column: str,
+                       state_column: str, state_1: str, state_2: str,
+                       individual_id_column: str, parametric: bool=False,
+                       palette: str='Set1', drop_duplicates: bool=True,
+                       between_group_distance: bool=False) -> None:
 
     metadata = _load_metadata(metadata)
 

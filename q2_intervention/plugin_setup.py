@@ -9,7 +9,7 @@
 
 from qiime2.plugin import Str, Bool, Plugin, Metadata, Choices, Range, Float
 from q2_types.feature_table import FeatureTable, RelativeFrequency
-from ._intervention import (paired_differences, pairwise_distance,
+from ._intervention import (pairwise_differences, pairwise_distances,
                             linear_mixed_effects)
 import q2_intervention
 from q2_types.distance_matrix import DistanceMatrix
@@ -80,7 +80,7 @@ paired_parameter_descriptions = {
 
 
 plugin.visualizers.register_function(
-    function=paired_differences,
+    function=pairwise_differences,
     inputs={'table': FeatureTable[RelativeFrequency]},
     parameters={**paired_params,
                 'metric': Str},
@@ -107,7 +107,7 @@ plugin.visualizers.register_function(
 
 
 plugin.visualizers.register_function(
-    function=pairwise_distance,
+    function=pairwise_distances,
     inputs={'distance_matrix': DistanceMatrix},
     parameters={**paired_params,
                 'between_group_distance': Bool},
