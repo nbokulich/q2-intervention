@@ -87,21 +87,12 @@ def _get_group_pairs(df, group_value, individual_id_column='SubjectID',
             _ind = df[individual_id_column] == individual_id
             individual_at_state_idx = group_md[_state & _ind].index
             if len(individual_at_state_idx) > 1:
-                errors.append(
-                    "Multiple values for {0} {1} at {2} {3} ({4})".format(
-                        individual_id_column, individual_id, state_column,
-                        state_value,
-                        ' '.join(map(str, individual_at_state_idx))))
-                if replicate_handling == 'error':
-                    raise ValueError((
-                        'Replicate values for individual {0} at state {1}. '
-                        'Remove replicate values from input files or set '
-                        'replicate_handling parameter to select how '
-                        'replicates are handled.'))
-                elif replicate_handling == 'random':
-                    result.append(choice(individual_at_state_idx))
-                elif replicate_handling == 'drop':
-                    pass
+                _id, error = _handle_replicates(
+                    individual_id_column, individual_id, state_column,
+                    state_value, individual_at_state_idx, replicate_handling)
+                errors.append(error)
+                if replicate_handling == 'random':
+                    result.append(_id)
             elif len(individual_at_state_idx) == 0:
                 errors.append("No values for {0} {1} at {2} {3}".format(
                     individual_id_column, individual_id, state_column,
@@ -112,6 +103,26 @@ def _get_group_pairs(df, group_value, individual_id_column='SubjectID',
         if len(result) == len(state_values):
             results.append(tuple(result))
     return results, errors
+
+
+def _handle_replicates(individual_id_column, individual_id, state_column,
+                       state_value, individual_at_state_idx,
+                       replicate_handling='error'):
+    '''individual_at_state_idx: list of pd.DataFrame indices.'''
+    if replicate_handling == 'error':
+        raise ValueError((
+            'Replicate values for individual {0} at state {1}. '
+            'Remove replicate values from input files or set '
+            'replicate_handling parameter to select how '
+            'replicates are handled.'.format(individual_id, state_value)))
+    elif replicate_handling == 'random':
+        _id = choice(individual_at_state_idx)
+    elif replicate_handling == 'drop':
+        _id = []
+    error = "Multiple values for {0} {1} at {2} {3} ({4})".format(
+        individual_id_column, individual_id, state_column, state_value,
+        ' '.join(map(str, individual_at_state_idx)))
+    return _id, error
 
 
 def _extract_distance_distribution(distance_matrix: DistanceMatrix, pairs,
@@ -656,3 +667,135 @@ def _validate_metadata_is_superset(metadata, table):
     if not table_ids.issubset(metadata_ids):
         raise ValueError('Missing samples in metadata: %r' %
                          table_ids.difference(metadata_ids))
+
+
+def _massage_data(metadata, state_column, individual_id_column,
+                  replicate_handling='ignore', drop_axis='auto'):
+    '''A function for dropping states/subjects that have missing values in a
+    dataframe.
+    metadata: pd.DataFrame
+        Sample metadata.
+    state_column: str
+        Describes state (e.g., time)
+    individual_id_column: str
+        Describes metadata individual subject IDs
+    drop_axis: str
+        states or individuals or ignore. Or auto drops highly undersampled
+        states/individuals first.
+    replicate_handling: str
+        How to handle replicates. drop, random, or error, or ignore.
+    '''
+    errors = []
+
+    # this error will only raise if users intentionally set a bad param combo
+    if drop_axis != 'ignore' and replicate_handling == 'drop':
+        raise ValueError(
+            'Do not set replicate_handling to "drop" while drop_axis is set '
+            'to a value other than "ignore", lest you face unintended '
+            'consequences. We suggest default values or replicate_handling == '
+            '"random" for best performance.')
+
+    if drop_axis != 'ignore':
+        metadata, error = _filter_missing_data_on_metadata(
+            metadata, state_column, individual_id_column, drop_axis=drop_axis)
+        errors.extend(error)
+
+    # check for replicates / drop
+    if replicate_handling != 'ignore':
+        metadata, error = _filter_replicates_on_metadata(
+            metadata, state_column, individual_id_column,
+            replicate_handling=replicate_handling)
+        errors.extend(error)
+
+    return metadata, errors
+
+
+def _filter_missing_data_on_metadata(metadata, state_column,
+                                     individual_id_column, drop_axis='auto'):
+    states = metadata[state_column].unique()
+    blacklist = set()
+    errors = []
+
+    # optionally automatically drop undersampled subjects/states
+    if drop_axis == 'auto':
+        for col in [state_column, individual_id_column]:
+            metadata, error = _drop_undersampled_data(metadata, col)
+            errors.append(error)
+        # now reset to drop missing states
+        drop_axis = 'states'
+
+    # check for missing times / drop
+    for subject, subject_md in metadata.groupby(individual_id_column):
+        missing_states = set(states) - set(subject_md[state_column])
+        if len(missing_states) > 0:
+            # add missing values to blacklist
+            if drop_axis == 'individuals':
+                blacklist.add(subject)
+                errors.append(
+                    "Dropped subject {0} due to missing values at {1} "
+                    "{2}".format(subject, state_column, missing_states))
+            elif drop_axis == 'states':
+                blacklist = blacklist.union(missing_states)
+                errors.append(
+                    "Dropped states {0} due to missing values in "
+                    "individual {1}".format(missing_states, subject))
+
+    # drop blacklisted values
+    if len(blacklist) > 0:
+        if drop_axis == 'individuals':
+            metadata = metadata[-metadata[individual_id_column].isin(
+                list(blacklist))]
+        elif drop_axis == 'states':
+            metadata = metadata[-metadata[state_column].isin(
+                list(blacklist))]
+    _check_md_length(metadata)
+
+    return metadata, errors
+
+
+def _filter_replicates_on_metadata(metadata, state_column,
+                                   individual_id_column,
+                                   replicate_handling='error'):
+    errors = []
+    blacklist = set()
+    for subject, subject_md in metadata.groupby(individual_id_column):
+        dups = subject_md[state_column].duplicated(False)
+        if dups.any():
+            dups = subject_md[dups]
+            # group duplicated state metadata by individual, grab indices
+            for state, individual_at_state in dups.groupby(state_column):
+                individual_at_state_idx = individual_at_state.index
+                # pass to replicate handling function
+                _id, error = _handle_replicates(
+                    individual_id_column, subject, state_column, state,
+                    individual_at_state_idx, replicate_handling)
+                # blacklist non-selected ids
+                blacklist = blacklist.union(
+                    set(individual_at_state_idx) - set([_id]))
+                errors.append(error)
+    metadata = metadata.drop(list(blacklist))
+    _check_md_length(metadata)
+
+    return metadata, errors
+
+
+def _check_md_length(metadata):
+    if len(metadata) < 1:
+        raise RuntimeError('All samples have been filtered out!')
+
+
+def _drop_undersampled_data(metadata, col, auto=True):
+    # calculate count of each unique state in col
+    _count = metadata[col].value_counts()
+    # remove undersampled states
+    if auto:
+        # remove all states below mean count
+        threshold = _count.mean()
+    else:
+        # remove all states below max count
+        threshold = _count.max()
+    undersampled = _count[_count < threshold].index
+    metadata = metadata[-metadata[col].isin(undersampled)]
+    error = ("Dropped {0} values due to undersampling: {1}".format(
+        col, undersampled))
+    return metadata, error

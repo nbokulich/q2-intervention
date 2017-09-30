@@ -19,7 +19,7 @@ from q2_longitudinal._utilities import (
     _multiple_group_difference, _per_method_pairwise_stats,
     _calculate_variability, _multiple_tests_correction,
     _add_sample_size_to_xtick_labels, _temporal_corr, _temporal_distance,
-    _nmit)
+    _nmit, _massage_data, _drop_undersampled_data)
 from q2_longitudinal._longitudinal import (
     pairwise_differences, pairwise_distances, linear_mixed_effects, volatility,
     nmit)
@@ -144,16 +144,15 @@ class UtilitiesTests(longitudinalTestPluginBase):
             pd.DataFrame({'Group': [], 'P-value': []}))
         test_df_mt = _multiple_tests_correction(test_df)
         # ZeroDivisionError is ignored, so new df should be empty and == old
-        self.assertEqual(test_df_mt.sort_index(inplace=True),
-                         test_df.sort_index(inplace=True))
+        self.assertTrue(test_df_mt.sort_index().equals(test_df.sort_index()))
 
     def test_temporal_corr(self):
         ind_id = pd.Series(
             [1, 2, 3, 1, 2, 3], index=['s1', 's2', 's3', 's4', 's5', 's6'])
         obs_tc = _temporal_corr(tab, ind_id)
         for k in obs_tc.keys():
-            self.assertEqual(exp_tc[k].sort_index(inplace=True),
-                             obs_tc[k].sort_index(inplace=True))
+            self.assertTrue(
+                exp_tc[k].sort_index().equals(obs_tc[k].sort_index()))
 
     def test_temporal_distance(self):
         id_set = pd.Series([1, 2, 3], index=['s1', 's2', 's3'])
@@ -165,6 +164,57 @@ class UtilitiesTests(longitudinalTestPluginBase):
                                  index=['s1', 's2', 's3', 's4', 's5', 's6'])
         obs_td = _nmit(tab, sample_md, 'sample_id')
         self.assertTrue(np.array_equal(obs_td.data, exp_td))
+
+    def test_drop_undersampled_data_drop_by_state(self):
+        exp = pd.DataFrame({'time': [7, 7, 7, 7, 7],
+                            'id': [1, 2, 3, 3, 4]},
+                           index=[14, 15, 16, 17, 18])
+        obs, error = _drop_undersampled_data(
+            df_test_drop_undersampled_data, 'time', auto=False)
+        self.assertTrue(obs.sort_index().equals(exp.sort_index()))
+
+    def test_drop_undersampled_data_drop_by_subject(self):
+        exp = pd.DataFrame({'time': [1, 2, 3, 5, 6, 7, 7, 8],
+                            'id': [3, 3, 3, 3, 3, 3, 3, 3]},
+                           index=[2, 5, 8, 12, 13, 16, 17, 19])
+        obs, error = _drop_undersampled_data(
+            df_test_drop_undersampled_data, 'id', auto=False)
+        self.assertTrue(obs.sort_index().equals(exp.sort_index()))
+
+    def test_drop_undersampled_data_auto(self):
+        exp = pd.DataFrame(
+            {'time': [1, 1, 1, 2, 2, 2, 3, 3, 3, 7, 7, 7, 7, 7],
+             'id': [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 3, 4]},
+            index=[0, 1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 16, 17, 18])
+        obs, error = _drop_undersampled_data(
+            df_test_drop_undersampled_data, 'time', auto=True)
+        self.assertTrue(obs.sort_index().equals(exp.sort_index()))
+
+    def test_massage_data_auto(self):
+        exp = pd.DataFrame({'time': [1, 1, 1, 2, 2, 2, 3, 3, 3, 7, 7, 7, 7],
+                            'id': [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 3]},
+                           index=[0, 1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 16, 17])
+        obs, error = _massage_data(df_test_drop_undersampled_data, 'time',
+                                   'id', 'ignore', 'auto')
+        self.assertTrue(obs.sort_index().equals(exp.sort_index()))
+
+    def test_massage_data_duplicates(self):
+        exp = pd.DataFrame({'time': [1, 1, 1, 2, 2, 2, 3, 3, 3, 7, 7, 7],
+                            'id': [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]},
+                            index=[0, 1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 16])
+        obs, error = _massage_data(
+            df_test_drop_undersampled_data, 'time', 'id', 'random', 'auto')
+        self.assertTrue(obs['time'].equals(exp['time']))
+        self.assertTrue(obs['id'].equals(exp['id']))
+
+    def test_massage_data_bad_param_combo_error(self):
+        with self.assertRaisesRegex(ValueError, "Do not set"):
+            obs, error = _massage_data(md_dup, 'Time', 'ind', 'drop', 'auto')
+
+    def test_massage_data_all_samples_filtered(self):
+        with self.assertRaisesRegex(RuntimeError, "filtered out!"):
+            obs, error = _massage_data(df_test_drop_undersampled_data, 'time',
+                                       'id', 'random', 'individuals')
 
 
 # This test class really just makes sure that each plugin runs without error.
@@ -325,17 +375,6 @@ dm = DistanceMatrix.read(StringIO(
 groups = {'a': [1, 2, 3, 2, 3, 1.5, 2.5, 2.7, 3, 2, 1, 1.5],
           'b': [3, 4, 5, 4.3, 3.4, 3.2, 3, 4.3, 4.9, 5, 3.2, 3.6]}
 
-exp_vol = pd.DataFrame(
-    [(12, 7.729282, 0.005433, 0.027166),
-     (6, 0.163122, .686298, 0.726866),
-     (6, 0.122009, 0.726866, 0.726866),
-     (6, 0.635881, 0.425206, 0.708677),
-     (6, 0.996229, 0.318225, 0.708677)],
-    columns=['N', 'fligner test statistic', 'P-Value', 'FDR P-value'],
-    index=['All states: compare groups', 'State 1: compare groups',
-           'State 2: compare groups', 'a: 1 vs. 2', 'b: 1 vs. 2'])
-exp_vol.index.name = 'Comparison'
-
 tab = pd.DataFrame({'o1': [0.3, 0.6, 0.6, 0.4, 0.5, 0.6],
                     'o2': [0.4, 0.3, 0.2, 0.4, 0.4, 0.3],
                     'o3': [0.3, 0.1, 0.2, 0.2, 0.1, 0.1]},
@@ -348,3 +387,8 @@ exp_tc = pd.DataFrame({(1, 'o1'): [1., 0., -1.], (1, 'o2'): [0., 1., 0.],
                        (3, 'o3'): [0., -1., 1.]}, index=['o1', 'o2', 'o3']).T
 
 exp_td = np.array([[0., 2., 2.], [2., 0., 2.], [2., 2., 0.]])
+
+df_test_drop_undersampled_data = pd.DataFrame(
+    {'time': [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4,
+              5, 5, 6, 7, 7, 7, 7, 7, 8, 8, 9],
+     'id': [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 1, 3, 3, 1, 2, 3, 3, 4, 3, 4, 9]})
