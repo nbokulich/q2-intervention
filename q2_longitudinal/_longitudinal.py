@@ -206,13 +206,20 @@ def _warn_column_name_exists(column_name):
     warnings.warn(warning, UserWarning)
 
 
-def volatility(output_dir: str, metadata: qiime2.Metadata,
-               state_column: str, individual_id_column: str=None,
-               default_group_column: str=None, default_metric: str=None,
-               table: pd.DataFrame=None, yscale: str='linear') -> None:
+def _volatility(metadata, table, importances, output_dir, state_column,
+                individual_id_column, default_group_column, default_metric,
+                yscale):
     if individual_id_column == state_column:
         raise ValueError('individual_id_column & state_column must be set to '
                          'unique values.')
+
+    is_feat_vol_plot = (importances is not None)
+    if is_feat_vol_plot:
+        # We don't want to include any MD columns in the metric select in the
+        # feature volatility variant of the viz, except for the state vo
+        state_md_col = metadata.get_column(state_column).to_dataframe()
+        metadata = metadata.filter_columns(column_type='categorical')
+        metadata = metadata.merge(qiime2.Metadata(state_md_col))
 
     # Convert table to metadata and merge, if present.
     if table is not None:
@@ -258,17 +265,23 @@ def volatility(output_dir: str, metadata: qiime2.Metadata,
         raise ValueError('state_column must contain at least two unique '
                          'values.')
 
-    data = metadata.to_dataframe()
+    control_chart_data = metadata.to_dataframe()
     # If we made it this far that means we can let Vega do it's thing!
     group_columns = list(categorical.columns.keys())
     if individual_id_column and individual_id_column not in group_columns:
         group_columns += [individual_id_column]
     metric_columns = list(numeric.columns.keys())
+    # TODO: fix this, it still sends along the data
+    if is_feat_vol_plot:
+        metric_columns.remove(state_column)
+        default_metric = metric_columns[0]
 
-    vega_spec = _render_volatility_spec(data, individual_id_column,
-                                        state_column, default_group_column,
-                                        group_columns, default_metric,
-                                        metric_columns, yscale)
+    vega_spec = _render_volatility_spec(is_feat_vol_plot, control_chart_data,
+                                        # TODO: think of a better name
+                                        importances,
+                                        individual_id_column, state_column,
+                                        default_group_column, group_columns,
+                                        default_metric, metric_columns, yscale)
 
     # Order matters here - need to render the template *after* copying the
     # directory tree, otherwise we will overwrite the index.html
@@ -276,6 +289,25 @@ def volatility(output_dir: str, metadata: qiime2.Metadata,
     copy_tree(os.path.join(TEMPLATES, 'volatility'), output_dir)
     index = os.path.join(TEMPLATES, 'volatility', 'index.html')
     q2templates.render(index, output_dir, context={'vega_spec': vega_spec})
+
+
+def volatility(output_dir: str, metadata: qiime2.Metadata,
+               state_column: str, individual_id_column: str=None,
+               default_group_column: str=None, default_metric: str=None,
+               table: pd.DataFrame=None, yscale: str='linear') -> None:
+    return _volatility(metadata, table, None, output_dir, state_column,
+                       individual_id_column, default_group_column,
+                       default_metric, yscale)
+
+
+def feature_volatility(output_dir: str, table: pd.DataFrame,
+                       importances: pd.DataFrame, metadata: qiime2.Metadata,
+                       state_column: str, individual_id_column: str=None,
+                       default_group_column: str=None,
+                       default_metric: str=None, yscale: str='linear') -> None:
+    return _volatility(metadata, table, importances, output_dir, state_column,
+                       individual_id_column, default_group_column,
+                       default_metric, yscale)
 
 
 def nmit(table: pd.DataFrame, metadata: qiime2.Metadata,

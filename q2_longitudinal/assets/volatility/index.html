@@ -3,6 +3,7 @@
 {% block title %}q2-longitudinal : volatility{% endblock %}
 
 {% block head %}
+ {# TODO: Update vega to 4.1.0 #}
   <script src="js/vega.min.js"></script>
   <script src="js/vega-embed.min.js"></script>
   <link rel="stylesheet" type="text/css" href="css/spinkit.css">
@@ -114,7 +115,7 @@
     // based on the browser dimensions.
     var opts = {
       width: $('#plot').width(),
-      height: $(window).height() * 0.75,  // This seems like an okay ratio...
+      height: $(window).height() * 0.75,
     };
 
     vegaEmbed('#plot', spec, opts).then(function(result) {

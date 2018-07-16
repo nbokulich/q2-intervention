@@ -11,7 +11,10 @@ import json
 import pandas as pd
 
 
-def _render_volatility_spec(data: pd.DataFrame, individual_id: str, state: str,
+def _render_volatility_spec(is_feat_vol_plot: bool,
+                            control_chart_data: pd.DataFrame,
+                            importances_chart_data: pd.DataFrame,
+                            individual_id: str, state: str,
                             default_group: str, group_columns: list,
                             default_metric: str, metric_columns: list,
                             yscale: str) -> str:
@@ -666,7 +669,7 @@ def _render_volatility_spec(data: pd.DataFrame, individual_id: str, state: str,
     # This looks weird, but the idea is to render a unique string into the JSON
     # spec, that way later on when we render the datatable to JSON, we can
     # just inject the datatable JSON wholesale.
-    DATA_PLACEHOLDER = '26b16f18-fd66-4531-bbcb-080beba01086'
+    CONTROL_CHART_DATA_PLACEHOLDER = '26b16f18-fd66-4531-bbcb-080beba01086'
 
     # Just a quick note, order doesn't matter here (JSON documents are not
     # ordered) - this will render out stochastically, which is fine - vega
@@ -789,7 +792,7 @@ def _render_volatility_spec(data: pd.DataFrame, individual_id: str, state: str,
         'data': [
             {
                 'name': 'individual',
-                'values': DATA_PLACEHOLDER,
+                'values': CONTROL_CHART_DATA_PLACEHOLDER,
                 'transform': [
                     {
                         'type': 'formula',
@@ -920,6 +923,7 @@ def _render_volatility_spec(data: pd.DataFrame, individual_id: str, state: str,
     }
     rendered_spec = json.dumps(spec)
     rendered_spec = rendered_spec.replace("'", r"\'")
-    rendered_data = data.to_json(orient='records')
+    rendered_control_chart_data = control_chart_data.to_json(orient='records')
 
-    return rendered_spec.replace('"%s"' % DATA_PLACEHOLDER, rendered_data)
+    return rendered_spec.replace('"%s"' % CONTROL_CHART_DATA_PLACEHOLDER,
+                                 rendered_control_chart_data)
