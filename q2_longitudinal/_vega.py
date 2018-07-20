@@ -11,6 +11,7 @@ import json
 import pandas as pd
 
 
+# TODO: do I need the feature flag?
 def _render_volatility_spec(is_feat_vol_plot: bool,
                             control_chart_data: pd.DataFrame,
                             importances_chart_data: pd.DataFrame,
@@ -367,12 +368,18 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
             'value': 400,
         },
         {
-            'name': 'chartPadding',
-            'value': 50,
+            'name': 'importancesChartHeight',
+            # TODO: make this a vega expression
+            'value': 10 * len(importances_chart_data.index),
         },
         {
             'name': 'height',
-            'update': '(controlChartHeight + chartPadding) * 2',
+            'update': 'controlChartHeight + importancesChartHeight'
+        },
+        {
+            # WHO YOU CALLIN' A HALFWIDTH?!
+            'name': 'halfWidth',
+            'update': 'width / 2',
         },
         {
             'name': 'grouper',
@@ -682,6 +689,7 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
     # spec, that way later on when we render the datatable to JSON, we can
     # just inject the datatable JSON wholesale.
     CONTROL_CHART_DATA_PLACEHOLDER = '26b16f18-fd66-4531-bbcb-080beba01086'
+    IMPORTANCES_CHART_DATA_PLACEHOLDER = '2be45c49-503e-4202-bf1f-234755a2abb3'
 
     # Just a quick note, order doesn't matter here (JSON documents are not
     # ordered) - this will render out stochastically, which is fine - vega
@@ -701,14 +709,6 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
         # Vega Editor.
         'width': 800,
         'signals': signals,
-        'scales': [
-            {
-                'name': 'layoutY',
-                'type': 'band',
-                'domain': ['row1', 'row2'],
-                'range': 'height',
-            },
-        ],
         'marks': [
             {
                 'description': 'Control Chart',
@@ -717,9 +717,7 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
                 'encode': {
                     'enter': {
                         'y': {
-                            'scale': 'layoutY',
-                            'value': 'row1',
-                            'offset': 20,
+                            'value': 0,
                         },
                         'width': {
                             'signal': 'width',
@@ -744,9 +742,10 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
                     },
                     {
                         'name': 'y',
-                        # Signal registration on this param is currently blocked by
-                        # https://github.com/vega/vega/issues/525, which is why this
-                        # setting is still a QIIME 2 param to this viz.
+                        # Signal registration on this param is currently
+                        # blocked by https://github.com/vega/vega/issues/525,
+                        # which is why this setting is still a QIIME 2 param to
+                        # this viz.
                         'type': yscale,
                         'range': [
                             {
@@ -967,9 +966,111 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
             },
         ],
     }
+
+    if is_feat_vol_plot:
+        importances_subplot = {
+            'description': 'Feature Importances',
+            'name': 'importance_chart',
+            'type': 'group',
+            'encode': {
+                'enter': {
+                    'y': {
+                        'signal': 'controlChartHeight',
+                        'offset': 75,
+                    },
+                    'width': {
+                        'signal': 'halfWidth',
+                    },
+                    'height': {
+                        'signal': 'importancesChartHeight',
+                    },
+                },
+            },
+            'scales': [
+                # TODO: sort y axis
+                {
+                    'name': 'y',
+                    'type': 'band',
+                    'domain': {
+                        'data': 'importances',
+                        'field': 'id',
+                    },
+                    'range': [
+                        0,
+                        {
+                            'signal': 'importancesChartHeight',
+                        },
+                    ],
+                },
+                {
+                    'name': 'x',
+                    'domain': {
+                        'data': 'importances',
+                        'field': 'importance',
+                    },
+                    'nice': True,
+                    'range': [
+                        0,
+                        {
+                            'signal': 'halfWidth',
+                        },
+                    ],
+                },
+            ],
+            'axes': [
+                {
+                    'orient': 'top',
+                    'scale': 'x',
+                    'title': 'Importance',
+                },
+            ],
+            'marks': [
+                {
+                    'type': 'rect',
+                    'from': {
+                        'data': 'importances',
+                    },
+                    'encode': {
+                        'enter': {
+                            'x': {
+                                'scale': 'x',
+                                'value': 0,
+                            },
+                            'y': {
+                                'scale': 'y',
+                                'field': 'id',
+                            },
+                            'width': {
+                                'scale': 'x',
+                                'field': 'importance',
+                            },
+                            'height': {
+                                'scale': 'y',
+                                'band': 1,
+                            },
+                            'fill': {
+                                'value': 'black',
+                            },
+                        },
+                    },
+                },
+            ],
+        }
+        spec['marks'].append(importances_subplot)
+        spec['data'].append({
+            'name': 'importances',
+            'values': IMPORTANCES_CHART_DATA_PLACEHOLDER,
+        })
+
     rendered_spec = json.dumps(spec)
     rendered_spec = rendered_spec.replace("'", r"\'")
     rendered_control_chart_data = control_chart_data.to_json(orient='records')
+    rendered_importances_chart_data = importances_chart_data.to_json(
+        orient='records', index=True)
 
-    return rendered_spec.replace('"%s"' % CONTROL_CHART_DATA_PLACEHOLDER,
-                                 rendered_control_chart_data)
+    rendered_spec = rendered_spec.replace(
+        '"%s"' % CONTROL_CHART_DATA_PLACEHOLDER, rendered_control_chart_data)
+    rendered_spec = rendered_spec.replace(
+        '"%s"' % IMPORTANCES_CHART_DATA_PLACEHOLDER,
+        rendered_importances_chart_data)
+    return rendered_spec

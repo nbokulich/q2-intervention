@@ -276,6 +276,11 @@ def _volatility(metadata, table, importances, output_dir, state_column,
         metric_columns.remove(state_column)
         default_metric = metric_columns[0]
 
+    # TODO: ID match table and importances
+    # TODO: do i need to set the id column label? or pass it through?
+    # TODO: drop zero imp?
+    importances = importances.reset_index(drop=False)
+
     vega_spec = _render_volatility_spec(is_feat_vol_plot, control_chart_data,
                                         # TODO: think of a better name
                                         importances,
