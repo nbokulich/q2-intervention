@@ -115,7 +115,7 @@
     // based on the browser dimensions.
     var opts = {
       width: $('#plot').width(),
-      height: $(window).height() * 0.75,
+      height: $(window).height(),
     };
 
     vegaEmbed('#plot', spec, opts).then(function(result) {

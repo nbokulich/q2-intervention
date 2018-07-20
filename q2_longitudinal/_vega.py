@@ -44,7 +44,7 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
                    ' "mean": datum.mean, "ci0": datum.ci0, "ci1": datum.ci1}'
                    % state)
 
-    marks = [
+    spaghetti_marks = [
         {
             'type': 'rule',
             'from': {
@@ -363,6 +363,18 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
 
     signals = [
         {
+            'name': 'controlChartHeight',
+            'value': 400,
+        },
+        {
+            'name': 'chartPadding',
+            'value': 50,
+        },
+        {
+            'name': 'height',
+            'update': '(controlChartHeight + chartPadding) * 2',
+        },
+        {
             'name': 'grouper',
             'value': default_group,
             'bind': {
@@ -527,7 +539,7 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
                             'datum["%s"], "group": datum.groupByVal, "state": '
                             'datum["%s"], "metric": datum.metricVal}' %
                             (individual_id, state))
-        marks.append({
+        spaghetti_marks.append({
                 'type': 'group',
                 'from': {
                     'facet': {
@@ -688,107 +700,141 @@ def _render_volatility_spec(is_feat_vol_plot: bool,
         # These dimensions are here for when the viz is opened in the
         # Vega Editor.
         'width': 800,
-        'height': 400,
         'signals': signals,
         'scales': [
             {
-                'name': 'x',
-                'type': 'linear',
-                'range': 'width',
-                'nice': True,
-                'domain': {
-                    'data': 'individual',
-                    'field': state,
-                    'sort': True,
-                },
-            },
-            {
-                'name': 'y',
-                # Signal registration on this param is currently blocked by
-                # https://github.com/vega/vega/issues/525, which is why this
-                # setting is still a QIIME 2 param to this viz.
-                'type': yscale,
+                'name': 'layoutY',
+                'type': 'band',
+                'domain': ['row1', 'row2'],
                 'range': 'height',
-                'nice': True,
-                'domain': {
-                    'signal': domain_expr,
-                    'sort': True,
-                },
-            },
-            {
-                'name': 'color',
-                'type': 'ordinal',
-                'range': {
-                    'scheme': {
-                        'signal': 'colorScheme',
-                    },
-                },
-                'domain': {
-                    'data': 'individual',
-                    'field': group_signal,
-                },
             },
         ],
-        'axes': [
+        'marks': [
             {
-                'orient': 'bottom',
-                'scale': 'x',
-                'title': state,
-            },
-            {
-                'orient': 'left',
-                'scale': 'y',
-                'title': metric_signal,
-            },
-        ],
-        'legends': [
-            {
-                'stroke': 'color',
-                'title': group_signal,
+                'description': 'Control Chart',
+                'name': 'spaghetti',
+                'type': 'group',
                 'encode': {
-                    'symbols': {
-                        'name': 'legendSymbol',
-                        'interactive': True,
-                        'update': {
-                            'fill': {
-                                'value': 'transparent',
-                            },
-                            'strokeWidth': {
-                                'value': 2,
-                            },
-                            'opacity': [
-                                {
-                                    'test': opacity_test,
-                                    'value': 1.0,
-                                },
-                                {
-                                    'value': 0.15,
-                                },
-                            ],
-                            'size': {
-                                'value': 100,
-                            },
+                    'enter': {
+                        'y': {
+                            'scale': 'layoutY',
+                            'value': 'row1',
+                            'offset': 20,
                         },
-                    },
-                    'labels': {
-                        'name': 'legendLabel',
-                        'interactive': True,
-                        'update': {
-                            'opacity': [
-                                {
-                                    'test': opacity_test,
-                                    'value': 1,
-                                },
-                                {
-                                    'value': 0.25,
-                                },
-                            ],
+                        'width': {
+                            'signal': 'width',
+                        },
+                        'height': {
+                            'signal': 'controlChartHeight',
                         },
                     },
                 },
+                'marks': spaghetti_marks,
+                'scales': [
+                    {
+                        'name': 'x',
+                        'type': 'linear',
+                        'range': 'width',
+                        'nice': True,
+                        'domain': {
+                            'data': 'individual',
+                            'field': state,
+                            'sort': True,
+                        },
+                    },
+                    {
+                        'name': 'y',
+                        # Signal registration on this param is currently blocked by
+                        # https://github.com/vega/vega/issues/525, which is why this
+                        # setting is still a QIIME 2 param to this viz.
+                        'type': yscale,
+                        'range': [
+                            {
+                                'signal': 'controlChartHeight',
+                            },
+                            0,
+                        ],
+                        'nice': True,
+                        'domain': {
+                            'signal': domain_expr,
+                            'sort': True,
+                        },
+                    },
+                    {
+                        'name': 'color',
+                        'type': 'ordinal',
+                        'range': {
+                            'scheme': {
+                                'signal': 'colorScheme',
+                            },
+                        },
+                        'domain': {
+                            'data': 'individual',
+                            'field': group_signal,
+                        },
+                    },
+                ],
+                'axes': [
+                    {
+                        'orient': 'bottom',
+                        'scale': 'x',
+                        'title': state,
+                    },
+                    {
+                        'orient': 'left',
+                        'scale': 'y',
+                        'title': metric_signal,
+                    },
+                ],
+                'legends': [
+                    {
+                        'stroke': 'color',
+                        'title': group_signal,
+                        'encode': {
+                            'symbols': {
+                                'name': 'legendSymbol',
+                                'interactive': True,
+                                'update': {
+                                    'fill': {
+                                        'value': 'transparent',
+                                    },
+                                    'strokeWidth': {
+                                        'value': 2,
+                                    },
+                                    'opacity': [
+                                        {
+                                            'test': opacity_test,
+                                            'value': 1.0,
+                                        },
+                                        {
+                                            'value': 0.15,
+                                        },
+                                    ],
+                                    'size': {
+                                        'value': 100,
+                                    },
+                                },
+                            },
+                            'labels': {
+                                'name': 'legendLabel',
+                                'interactive': True,
+                                'update': {
+                                    'opacity': [
+                                        {
+                                            'test': opacity_test,
+                                            'value': 1,
+                                        },
+                                        {
+                                            'value': 0.25,
+                                        },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                ],
             },
         ],
-        'marks': marks,
         'data': [
             {
                 'name': 'individual',
