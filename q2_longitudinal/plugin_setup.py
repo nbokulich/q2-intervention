@@ -20,8 +20,8 @@ from ._type import FirstDifferences
 from ._format import FirstDifferencesFormat, FirstDifferencesDirectoryFormat
 from ._longitudinal import (pairwise_differences, pairwise_distances,
                             linear_mixed_effects, volatility,
-                            feature_volatility, nmit, first_differences,
-                            first_distances)
+                            visualize_feature_volatility, nmit,
+                            first_differences, first_distances)
 import q2_longitudinal
 
 
@@ -249,7 +249,7 @@ plugin.visualizers.register_function(
 )
 
 plugin.visualizers.register_function(
-    function=feature_volatility,
+    function=visualize_feature_volatility,
     inputs={
         'table': FeatureTable[RelativeFrequency],
         'importances': FeatureData[Importance],

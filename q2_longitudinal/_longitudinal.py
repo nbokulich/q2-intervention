@@ -23,7 +23,8 @@ from ._utilities import (_get_group_pairs, _extract_distance_distribution,
                          _regplot_subplots_from_dataframe, _load_metadata,
                          _validate_input_values, _validate_input_columns,
                          _nmit, _validate_is_numeric_column,
-                         _tabulate_matrix_ids, _first_differences)
+                         _tabulate_matrix_ids, _first_differences,
+                         _summarize_feature_stats)
 from ._vega import _render_volatility_spec
 
 
@@ -221,6 +222,11 @@ def _volatility(metadata, table, importances, output_dir, state_column,
         metadata = metadata.filter_columns(column_type='categorical')
         metadata = metadata.merge(qiime2.Metadata(state_md_col))
 
+        # Compile first differences and other stats on feature data
+        feature_md = _summarize_feature_stats(table, state_md_col)
+        feature_md.to_csv(
+            os.path.join(output_dir, 'feature_metadata.tsv'), sep='\t')
+
     # Convert table to metadata and merge, if present.
     if table is not None:
         table.index.name = 'id'
@@ -305,11 +311,15 @@ def volatility(output_dir: str, metadata: qiime2.Metadata,
                        default_metric, yscale)
 
 
-def feature_volatility(output_dir: str, table: pd.DataFrame,
-                       importances: pd.DataFrame, metadata: qiime2.Metadata,
-                       state_column: str, individual_id_column: str=None,
-                       default_group_column: str=None,
-                       default_metric: str=None, yscale: str='linear') -> None:
+def visualize_feature_volatility(output_dir: str,
+                                 table: pd.DataFrame,
+                                 importances: pd.DataFrame,
+                                 metadata: qiime2.Metadata,
+                                 state_column: str,
+                                 individual_id_column: str=None,
+                                 default_group_column: str=None,
+                                 default_metric: str=None,
+                                 yscale: str='linear') -> None:
     return _volatility(metadata, table, importances, output_dir, state_column,
                        individual_id_column, default_group_column,
                        default_metric, yscale)

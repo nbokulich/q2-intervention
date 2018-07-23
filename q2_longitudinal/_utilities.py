@@ -741,3 +741,25 @@ def _validate_is_numeric_column(metadata, metric):
         raise ValueError('{0} is not a numeric metadata column. '
                          'Please choose a metadata column containing only '
                          'numeric values.'.format(metric))
+
+
+def _summarize_feature_stats(table, state_md_col):
+    feature_table = pd.concat([state_md_col, table], join='inner', axis=1)
+    # calculate mean at each state value
+    state = state_md_col.columns[0]
+    feature_state_mean = feature_table.groupby(state).mean()
+    # first differences of mean per state
+    first_diffs = feature_state_mean.diff().dropna()
+    # sum increase and decrease across states
+    feature_md = pd.DataFrame(index=table.columns)
+    feature_table.index.name = 'feature id'
+    feature_md['Cumulative Avg Decrease'] = first_diffs[first_diffs < 0].sum()
+    feature_md['Cumulative Avg Increase'] = first_diffs[first_diffs > 0].sum()
+    # collect other descriptive stats
+    feature_md['Variance'] = table.var()
+    feature_md['Mean'] = table.mean()
+    feature_md['Median'] = table.median()
+    feature_md['Standard Deviation'] = table.std()
+    feature_md['CV (%)'] = (
+        feature_md['Standard Deviation'] / feature_md['Mean'] * 100)
+    return feature_md
